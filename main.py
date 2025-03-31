@@ -8,10 +8,10 @@ import multiprocessing
 random.seed()
 
 modelsPerGen = 150
-threads = 4
+threads = 6
 rounds = 2000
 layers = [15,8,8,2]
-bias = 1
+bias = [10, 5, 2]
 
 def normish(x, var):
     test = random.random()
@@ -58,12 +58,12 @@ def train(start, delta):
     for type in start:
         variations.append(type)
         for i in range(round((modelsPerGen/3)-1)):
-            delta2 = normish(0.7, 1)
+            delta2 = normish(0.5, 1)
             interim = type
             for layer in interim:
                 for node in layer:
                     for weight in node:
-                        weight += delta2*delta*normish(0.9, 0.8)
+                        weight += delta2*delta*normish(0.8, 0.7)
             variations.append(interim)
 
     manager = multiprocessing.Manager()
@@ -207,7 +207,7 @@ def main():
         i+=1
         if i % 80 == 0:
             print(startPoint)
-    print(startPoint)
+
 
 if __name__ == "__main__":
     main()

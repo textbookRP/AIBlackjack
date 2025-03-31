@@ -12,11 +12,10 @@ class Model:
     def compute(self):
         nodes = np.array([self.vals])
         
-        for layer in self.weights:
+        for i, layer in enumerate(self.weights):
             matrix = np.array(layer)
             nodes = nodes.dot(matrix)
-            for node in nodes:
-                node = self.relu(node - self.bias)
+            nodes = self.relu(nodes - self.bias[i])
 
         if nodes[-1][0] > nodes[-1][1]:
             return 0
