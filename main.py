@@ -7,18 +7,107 @@ import multiprocessing
 
 random.seed()
 
-modelsPerGen = 350
-threads = 7
-rounds = 8000
+modelsPerGen = 500
+threads = 8
+rounds = 5000
+layers = [15,12,12,2]
+bias = 0.1
+
+def normish():
+    test = random.random()
+    if test > 0.99:
+        return np.random.normal(0,2)
+    return np.random.normal(0,0.2)
+
+def play_round(table, player, model):
+    hit = False
+    while not (player.bust or player.stand):
+        for i in range(len(player.hand)):
+            model.vals[i+1] = player.hand[i].value
+
+        action = model.compute()
+
+        if action == 0:
+            player.play_hit()
+            hit = True
+
+        elif action == 1:
+            player.play_stand()
+
+    return hit
+
+def ranStart():
+    interim=[]
+    for layer in range(len(layers)-1):
+        arr1 = []
+        for node in range(layers[layer]):
+            arr2 = []
+            for weight in range(layers[layer+1]):
+                arr2.append(random.random())
+            arr1.append(arr2)
+        interim.append(arr1)
+            
+
+    return interim
+
+
+def train(start, delta):
+
+    variations = []
+
+    for type in start:
+        variations.append(type)
+        for i in range(round((modelsPerGen/3)-1)):
+            interim = type
+            for layer in interim:
+                for node in layer:
+                    for weight in node:
+                        weight += delta*normish()
+            variations.append(interim)
+
+    manager = multiprocessing.Manager()
+    scoresd = manager.dict()
+    hitsd = manager.dict()
+    cashd = manager.dict()
+
+    scores = []
+    hits = []
+    cash = []
+
+    workers = []
+
+    bounds = [0]
+
+    for i in range(threads):
+        bounds.append(round((modelsPerGen/threads)*i))
+
+    for i in range(threads):
+        workers.append(cthread(variations[bounds[i]:bounds[i+1]], i, scoresd, hitsd, cashd))
+
+    for item in workers:
+        item.start()
+    
+    for item in workers:
+        item.join()
+
+    for i in range(threads):
+        scores += scoresd[i]
+        hits += hitsd[i]
+        cash += cashd[i]
+
+    print(f"winner was {scores.index(max(scores))} with {max(scores)} (cash: {cash[scores.index(max(scores))]}, hits: {hits[scores.index(max(scores))]}) with this generation having a mean of {np.mean(scores)} (cash: {np.mean(cash)}, hits: {np.mean(hits)})")
+    return [variations[scores.index(heapq.nlargest(3, scores)[0])], variations[scores.index(heapq.nlargest(3, scores)[1])], variations[scores.index(heapq.nlargest(3, scores)[2])]]
+
 
 class cthread(multiprocessing.Process):
-    def __init__(self, vars, num, scoresd, hitsd):
+    def __init__(self, vars, num, scoresd, hitsd, cashd):
         multiprocessing.Process.__init__(self)
         self.tscores = []
         self.vars = vars
         self.num = num
         self.scoresd = scoresd
         self.hitsd = hitsd
+        self.cashd = cashd
 
     def get(self):
         return self.tscores
@@ -26,6 +115,7 @@ class cthread(multiprocessing.Process):
     def run(self):
         self.tempScores = []
         self.tempHits = []
+        self.tempCash = []
         for start in self.vars:
             net_gain = 0
             hits = 0
@@ -38,7 +128,7 @@ class cthread(multiprocessing.Process):
 
                 vals = [dealer_first_card.value, table.players[0].hand[0].value, table.players[0].hand[1].value, 0,0,0,0,0,0,0,0,0,0,0,0]
 
-                model = Model(start, vals)
+                model = Model(start, vals, bias)
 
                 for player in table:
                    r = play_round(table, player, model)
@@ -53,6 +143,8 @@ class cthread(multiprocessing.Process):
                     net_gain += 1
                 elif table.players[0].result < 0:
                     net_gain -= 1
+
+            self.tempCash.append(net_gain)
             
             net_gain -= (0.0000006*(((rounds/2)-hits)**2))**3
             net_gain = round(net_gain)
@@ -61,93 +153,17 @@ class cthread(multiprocessing.Process):
             self.tempHits.append(hits)
         self.scoresd[self.num] = self.tempScores
         self.hitsd[self.num] = self.tempHits
-
-def ranStart(model):
-    interim=[]
-    for i in range(model.node_count):
-        interim.append(random.random())
-    return interim
-
-def print_cards(player):
-    print(f"\n{player.name}")
-    for i, card in enumerate(player.hand):
-        if (type(player) != Dealer) or (type(player) == Dealer and i == 0):
-            print(f"{card.rank} of {card.suit}")
-    if type(player) != Dealer:
-        print(player.total)
-
-
-def play_round(table, player, model):
-    #print_cards(table.dealer)
-    #print_cards(player)
-    hit = False
-    while not (player.bust or player.stand):
-        for i in range(len(player.hand)):
-            model.vals[i+1] = player.hand[i].value
-        action = model.compute()
-        if action == 0:
-            player.play_hit()
-            hit = True
-            #print_cards(player)
-        elif action == 1:
-            player.play_stand()
-    return hit
-
-
-def show_result(table):
-    print_cards(table.dealer)
-    print(f"\nDealer has {table.dealer.total}")
-    for player in table:
-        result = player.result
-
-def train(start, delta):
-    variations = []
-    for type in start:
-        variations.append(type)
-        for i in range(round((modelsPerGen/3)-1)):
-            interim = []
-            for weight in type:
-                interim.append(weight + delta*np.random.normal(0,0.3))
-            variations.append(interim)
-
-    manager = multiprocessing.Manager()
-    scoresd = manager.dict()
-    hitsd = manager.dict()
-
-    scores = []
-    hits = []
-
-    workers = []
-
-    bounds = [0]
-
-    for i in range(threads):
-        bounds.append(round((modelsPerGen/threads)*i))
-
-    for i in range(threads):
-        workers.append(cthread(variations[bounds[i]:bounds[i+1]], i, scoresd, hitsd))
-
-    for item in workers:
-        item.start()
-    
-    for item in workers:
-        item.join()
-
-    for i in range(threads):
-        scores += scoresd[i]
-        hits += hitsd[i]
-
-    print(f"winner was {scores.index(max(scores))} with {max(scores)}, with this generation having a mean of {np.mean(scores)} and {hits[scores.index(max(scores))]} hits")
-    return [variations[scores.index(heapq.nlargest(3, scores)[0])], variations[scores.index(heapq.nlargest(3, scores)[1])], variations[scores.index(heapq.nlargest(3, scores)[2])]]
+        self.cashd[self.num] = self.tempCash
 
 def main():
     startNetwork = []
-    for i in range(round(modelsPerGen/2)):
-        startNetwork.append(ranStart(Model(None, None)))
+    for i in range(round(modelsPerGen)):
+        startNetwork.append(ranStart())
     
     scores = []
 
     for start in startNetwork:
+
         net_gain = 0
         hits = 0
 
@@ -161,7 +177,7 @@ def main():
 
             vals = [dealer_first_card.value, table.players[0].hand[0].value, table.players[0].hand[1].value, 0,0,0,0,0,0,0,0,0,0,0,0]
 
-            model = Model(start, vals)
+            model = Model(start, vals, bias)
 
             for player in table:
                 r = play_round(table, player, model)
@@ -186,7 +202,7 @@ def main():
 
     i=4
     while True:
-        startPoint = train(startPoint, 1/((i)+60))
+        startPoint = train(startPoint, 1/((i)+130))
         i+=1
         if i % 80 == 0:
             print(startPoint)
@@ -194,4 +210,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
