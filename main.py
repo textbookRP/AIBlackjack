@@ -7,16 +7,16 @@ import multiprocessing
 
 random.seed()
 
-modelsPerGen = 500
-threads = 8
-rounds = 5000
-layers = [15,12,12,2]
-bias = 0.1
+modelsPerGen = 150
+threads = 4
+rounds = 2000
+layers = [15,8,8,2]
+bias = 1
 
-def normish():
+def normish(x, var):
     test = random.random()
-    if test > 0.99:
-        return np.random.normal(0,2)
+    if test > x:
+        return np.random.normal(0,var)
     return np.random.normal(0,0.2)
 
 def play_round(table, player, model):
@@ -58,11 +58,12 @@ def train(start, delta):
     for type in start:
         variations.append(type)
         for i in range(round((modelsPerGen/3)-1)):
+            delta2 = normish(0.7, 1)
             interim = type
             for layer in interim:
                 for node in layer:
                     for weight in node:
-                        weight += delta*normish()
+                        weight += delta2*delta*normish(0.9, 0.8)
             variations.append(interim)
 
     manager = multiprocessing.Manager()
@@ -95,7 +96,7 @@ def train(start, delta):
         hits += hitsd[i]
         cash += cashd[i]
 
-    print(f"winner was {scores.index(max(scores))} with {max(scores)} (cash: {cash[scores.index(max(scores))]}, hits: {hits[scores.index(max(scores))]}) with this generation having a mean of {np.mean(scores)} (cash: {np.mean(cash)}, hits: {np.mean(hits)})")
+    print(f"winner was {scores.index(max(scores))} with {max(scores)} (cash: {cash[scores.index(max(scores))]}, hits: {hits[scores.index(max(scores))]}) with this generation having a mean of {round(np.mean(scores))} (cash: {round(np.mean(cash))}, hits: {round(np.mean(hits))})")
     return [variations[scores.index(heapq.nlargest(3, scores)[0])], variations[scores.index(heapq.nlargest(3, scores)[1])], variations[scores.index(heapq.nlargest(3, scores)[2])]]
 
 
@@ -202,7 +203,7 @@ def main():
 
     i=4
     while True:
-        startPoint = train(startPoint, 1/((i)+130))
+        startPoint = train(startPoint, 1/((i)+100))
         i+=1
         if i % 80 == 0:
             print(startPoint)
