@@ -6,16 +6,13 @@ class Model:
         self.vals = vals
         self.bias = bias
         
-    def relu(self, a):
-        return np.maximum(0,a)
-    
     def compute(self):
         nodes = np.array([self.vals])
         
         for i, layer in enumerate(self.weights):
             matrix = np.array(layer)
             nodes = nodes.dot(matrix)
-            nodes = self.relu(nodes - self.bias[i])
+            nodes = np.maximum(0, (nodes - self.bias[i]))
 
         if nodes[-1][0] > nodes[-1][1]:
             return 0

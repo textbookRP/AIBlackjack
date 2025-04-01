@@ -7,11 +7,11 @@ import multiprocessing
 
 random.seed()
 
-modelsPerGen = 150
-threads = 6
-rounds = 2000
+modelsPerGen = 800
+threads = 11
+rounds = 8000
 layers = [15,8,8,2]
-bias = [10, 5, 2]
+bias = [6,5,3]
 
 def normish(x, var):
     test = random.random()
@@ -55,16 +55,27 @@ def train(start, delta):
 
     variations = []
 
-    for type in start:
-        variations.append(type)
-        for i in range(round((modelsPerGen/3)-1)):
-            delta2 = normish(0.5, 1)
-            interim = type
-            for layer in interim:
+    for i, item in enumerate(start):
+        variations.append(item)
+        allocated = 0.2
+        if i == 0:
+            allocated = 0.6
+        for i in range(round((allocated*modelsPerGen)-1)):
+            delta2 = normish(0.5, 2.5)
+            interim = []
+
+            for layer in item:
+                arr1 = []
                 for node in layer:
+                    arr2 = []
                     for weight in node:
-                        weight += delta2*delta*normish(0.8, 0.7)
+                        arr2.append(weight+(delta2*delta*normish(0.96, 1.3)))
+                    arr1.append(arr2)
+                interim.append(arr1)
+
+        
             variations.append(interim)
+
 
     manager = multiprocessing.Manager()
     scoresd = manager.dict()
@@ -97,7 +108,11 @@ def train(start, delta):
         cash += cashd[i]
 
     print(f"winner was {scores.index(max(scores))} with {max(scores)} (cash: {cash[scores.index(max(scores))]}, hits: {hits[scores.index(max(scores))]}) with this generation having a mean of {round(np.mean(scores))} (cash: {round(np.mean(cash))}, hits: {round(np.mean(hits))})")
-    return [variations[scores.index(heapq.nlargest(3, scores)[0])], variations[scores.index(heapq.nlargest(3, scores)[1])], variations[scores.index(heapq.nlargest(3, scores)[2])]]
+    #print(scores[50])
+    final = []
+    for i in range(3):
+        final.append(variations[scores.index(heapq.nlargest(3, scores)[i])])
+    return final
 
 
 class cthread(multiprocessing.Process):
@@ -147,7 +162,7 @@ class cthread(multiprocessing.Process):
 
             self.tempCash.append(net_gain)
             
-            net_gain -= (0.0000006*(((rounds/2)-hits)**2))**3
+            net_gain += (10000*rounds)/((hits+10)*(hits-rounds-10))
             net_gain = round(net_gain)
 
             self.tempScores.append(net_gain)
@@ -158,56 +173,54 @@ class cthread(multiprocessing.Process):
 
 def main():
     startNetwork = []
-    for i in range(round(modelsPerGen)):
+    for i in range(round(modelsPerGen*3)):
         startNetwork.append(ranStart())
-    
+
+    manager = multiprocessing.Manager()
+    scoresd = manager.dict()
+    hitsd = manager.dict()
+    cashd = manager.dict()
+
     scores = []
+    hits = []
+    cash = []
 
-    for start in startNetwork:
+    workers = []
 
-        net_gain = 0
-        hits = 0
+    bounds = [0]
 
-        for i in range(rounds):
-            a = ("AI", 1)
-            players = (a, )
+    for i in range(threads):
+        bounds.append(round((modelsPerGen/threads)*i))
 
-            table = Table(players)
+    for i in range(threads):
+        workers.append(cthread(startNetwork[bounds[i]:bounds[i+1]], i, scoresd, hitsd, cashd))
 
-            dealer_first_card = table.dealer.hand[0]
+    for item in workers:
+        item.start()
+    
+    for item in workers:
+        item.join()
 
-            vals = [dealer_first_card.value, table.players[0].hand[0].value, table.players[0].hand[1].value, 0,0,0,0,0,0,0,0,0,0,0,0]
+    for i in range(threads):
+        scores += scoresd[i]
+        hits += hitsd[i]
+        cash += cashd[i]
 
-            model = Model(start, vals, bias)
+    print(f"winner was {scores.index(max(scores))} with {max(scores)} (cash: {cash[scores.index(max(scores))]}, hits: {hits[scores.index(max(scores))]}) with this generation having a mean of {round(np.mean(scores))} (cash: {round(np.mean(cash))}, hits: {round(np.mean(hits))})")
 
-            for player in table:
-                r = play_round(table, player, model)
-            
-            if r == True:
-                hits += 1
+    final = []
+    for i in range(3):
+        final.append(startNetwork[scores.index(heapq.nlargest(3, scores)[i])])
 
-            table.dealer.play_dealer()
-            #show_result(table)
-
-            if table.players[0].result > 0:
-                net_gain += 1
-            elif table.players[0].result < 0:
-                net_gain -= 1
-        net_gain -= (0.0000006*(((rounds/2)-hits)**2))**3
-        net_gain = round(net_gain)
-        scores.append(net_gain)
-        print(f"{startNetwork.index(start)} net win: {net_gain} and {hits} hits")
-    print(f"winner was {scores.index(max(scores))} with {max(scores)} and {hits} hits")
-
-    startPoint=[startNetwork[scores.index(heapq.nlargest(3, scores)[0])], startNetwork[scores.index(heapq.nlargest(3, scores)[1])], startNetwork[scores.index(heapq.nlargest(3, scores)[2])]]
-
+    startPoint = final
     i=4
-    while True:
-        startPoint = train(startPoint, 1/((i)+100))
-        i+=1
-        if i % 80 == 0:
-            print(startPoint)
 
+    while True:
+        interim = train(startPoint, 1/((i)+100))
+        startPoint = interim
+        i+=1
+        if i % 20 == 0:
+            print(startPoint[0])
 
 if __name__ == "__main__":
     main()
