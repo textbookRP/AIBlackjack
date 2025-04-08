@@ -1,4 +1,4 @@
-from settings import layers
+from settings import *
 import random
 import numpy as np
 
@@ -32,8 +32,8 @@ def ranStart():
             
     return interim
 
-def normish(x, var):
+def normish(x, y, z):
     test = random.random()
     if test > x:
-        return np.random.normal(0,var)
-    return np.random.normal(0,0.2)
+        return np.random.normal(x, z)
+    return np.random.normal(x, y)

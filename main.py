@@ -5,7 +5,7 @@ import heapq
 import numpy as np
 import multiprocessing
 from cthread import Cthread
-from settings import modelsPerGen, threads, rounds, layers, bias, start
+from settings import *
 from utils import ranStart, normish
 
 random.seed()
@@ -20,7 +20,7 @@ def train(start, delta):
         if i == 0:
             allocated = 0.6
         for i in range(round((allocated*modelsPerGen)-1)):
-            delta2 = normish(0.5, 4)
+            delta2 = normish(delta2Prob, delta2VarDefault, delta2VarTrigger)
             interim = []
 
             for layer in item:
@@ -28,7 +28,7 @@ def train(start, delta):
                 for node in layer:
                     arr2 = []
                     for weight in node:
-                        arr2.append(weight+(delta2*delta*normish(0.98, 1)))
+                        arr2.append(weight+(delta2*delta*normish(normishProb, normishVarDefault, normishVarTrigger)))
                     arr1.append(arr2)
                 interim.append(arr1)
 
